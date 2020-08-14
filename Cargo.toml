@@ -10,7 +10,8 @@ repository = "https://github.com/celeo/scp_containment_unit"
 license = "MIT OR Apache-2.0"
 exclude = [
   ".github",
-  ".env"
+  ".env",
+  "scp_containment_unit.service"
 ]
 keywords = []
 categories = []
