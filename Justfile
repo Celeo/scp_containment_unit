@@ -9,8 +9,8 @@ check:
 
 build_release: build
   @cargo build --release
-  @cp target/release/twitch_chat_to_db .
-  @strip ./twitch_chat_to_db
+  @cp target/release/scp_containment_unit .
+  @strip ./scp_containment_unit
 
 test:
   @cargo test
