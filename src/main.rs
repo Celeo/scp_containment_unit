@@ -28,7 +28,7 @@ fn get_containment_role() -> Result<u64> {
 #[command]
 #[checks(Admin)]
 fn breach(context: &mut Context, message: &Message) -> CommandResult {
-    info!("message = {:?}", message);
+    info!("Breach command used by {}", message.author.name);
     message.reply(&context, "Aye, aye sir!")?;
     message.channel_id.send_message(&context, |m| {
         m.content("Containment breach detected!");
@@ -68,6 +68,7 @@ fn breach(context: &mut Context, message: &Message) -> CommandResult {
 #[command]
 #[checks(Admin)]
 fn unbreach(context: &mut Context, message: &Message) -> CommandResult {
+    info!("Unbreach command used by {}", message.author.name);
     message.reply(&context, "Aye, aye sir!")?;
 
     let guild = message
