@@ -6,11 +6,10 @@ A Discord bot.
 
 ## Installing
 
-TBD
+1. Clone the repo and build the binary
 
 ## Using
 
-1. Clone the repo and build the binary
 1. Create an `.env` file next to the bot binary
 1. Populate with `DISCORD_TOKEN` (String), `CONTAINMENT_USER_IDS` (comma-separated number), and `CONTAINMENT_ROLE` (number) values
 1. Run the bot (does not take any arguments)
