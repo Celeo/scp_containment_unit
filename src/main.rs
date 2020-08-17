@@ -11,7 +11,7 @@ use serenity::{
 use std::{env, path::Path, process};
 
 #[group]
-#[commands(breach, unbreach)]
+#[commands(breach, unbreach, sitrep)]
 struct General;
 
 fn get_containment_user_ids() -> Result<Vec<u64>> {
@@ -62,6 +62,16 @@ fn breach(context: &mut Context, message: &Message) -> CommandResult {
             }
         }
     }
+    Ok(())
+}
+
+#[command]
+#[checks(Admin)]
+fn sitrep(context: &mut Context, message: &Message) -> CommandResult {
+    message.channel_id.send_message(&context, |m| {
+        m.content("Standing at the ready! o7");
+        m
+    })?;
     Ok(())
 }
 
