@@ -72,7 +72,7 @@ fn members_to_string(members: &[Member]) -> String {
             members[1].display_name()
         ),
         _ => {
-            let comma_seperated = members
+            let comma_separated = members
                 .iter()
                 .map(|m| format!(r#""{}""#, m.display_name()))
                 .take(members.len() - 1)
@@ -80,7 +80,7 @@ fn members_to_string(members: &[Member]) -> String {
                 .join(", ");
             format!(
                 "{}, and {}",
-                comma_seperated,
+                comma_separated,
                 members[members.len() - 1].display_name()
             )
         }
