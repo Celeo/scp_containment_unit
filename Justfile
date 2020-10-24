@@ -5,6 +5,8 @@ build: check
 
 check:
   @cargo check
+
+clippy:
   @cargo +nightly clippy
 
 build_release: build

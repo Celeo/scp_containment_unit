@@ -223,7 +223,7 @@ impl EventHandler for Handler {}
 fn main() -> Result<()> {
     // environment setup
     if Path::new(".env").exists() {
-        kankyo::init()?;
+        dotenv::dotenv()?;
     }
     pretty_env_logger::init();
     let token = match env::var("DISCORD_TOKEN") {
