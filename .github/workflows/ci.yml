@@ -29,19 +29,9 @@ jobs:
         key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
     - name: Install clippy
       run: rustup component add clippy
-    - name: Run clippy
+    - name: Clippy
       run: cargo clippy -- -D warnings
-    - name: Run tests
+    - name: Test
       run: cargo test --verbose --all
-    - name: Build release binary
-      run: cargo build --release
-    - name: Set binary permissions
-      run: chmod 777 target/release/scp_containment_unit
-    - name: Push binary to server
-      uses: appleboy/scp-action@master
-      with:
-        host: ${{ secrets.HOST }}
-        key: ${{ secrets.KEY }}
-        username: ${{ secrets.USERNAME }}
-        source: "target/release/scp_containment_unit"
-        target: "/srv/scp_containment_unit"
+    - name: Build
+      run: cargo build --all
