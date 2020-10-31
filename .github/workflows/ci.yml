@@ -33,5 +33,13 @@ jobs:
       run: cargo clippy -- -D warnings
     - name: Run tests
       run: cargo test --verbose --all
-    - name: Build binary
-      run: cargo build --all
+    - name: Build release binary
+      run: cargo build --release
+    - name: Push binary to server
+      uses: appleboy/scp-action@master
+      with:
+        host: ${{ secrets.HOST }}
+        key: ${{ secrets.KEY }}
+        username: ${{ secrets.USERNAME }}
+        source: "target/release/scp_containment_unit"
+        target: "/srv/scp_containment_unit"
