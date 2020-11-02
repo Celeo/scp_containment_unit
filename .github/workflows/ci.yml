@@ -44,4 +44,4 @@ jobs:
         key: ${{ secrets.KEY }}
         username: ${{ secrets.USERNAME }}
         source: scp_containment_unit.new
-        target: /srv/scp_containment_unit
+        target: /srv/scp_containment_unit.new
