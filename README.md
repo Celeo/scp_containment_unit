@@ -40,7 +40,7 @@ Licensed under either of
 
 ## Contributing
 
-Note: proceeding my normal "contributions welcome" message is a disclaimer that this bot is specifically made for a Discord guild I'm in. If you want to contribute a bit, you're welcome to, but the intent of this bot won't really grow.
+Note: preceding my normal "contributions welcome" message is a disclaimer that this bot is specifically made for a Discord guild I'm in. If you want to contribute a bit, you're welcome to, but the intent of this bot won't really grow.
 
 Please feel free to contribute. Please open an issue first (or comment on an existing one) so that I know that you want to add/change something.
 
