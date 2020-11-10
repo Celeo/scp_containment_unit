@@ -1,241 +1,137 @@
-use anyhow::{anyhow, Result};
-use log::{debug, error, info};
+use anyhow::anyhow;
+use log::{debug, error, info, warn};
 use serenity::{
     framework::standard::{
-        macros::{check, command, group},
-        Args, CheckResult, CommandOptions, CommandResult, StandardFramework,
+        help_commands,
+        macros::{check, command, group, help},
+        Args, CheckResult, CommandGroup, CommandOptions, CommandResult, HelpOptions,
+        StandardFramework,
     },
-    futures::StreamExt,
-    model::{channel::Message, gateway::Ready, guild::Member, id::GuildId},
+    model::{channel::Message, gateway::Ready, id::UserId},
     prelude::*,
+    utils::parse_mention,
 };
-use std::{env, path::Path, process};
+use std::{collections::HashSet, env, path::Path, process};
 
-/// Return user ids from the 'CONTAINMENT_USER_IDS' environment variable.
-///
-/// The environment variable is treated as a comma-delimited list of `u64`s.
-fn get_containment_user_ids() -> Result<Vec<u64>> {
-    Ok(env::var("CONTAINMENT_USER_IDS")?
-        .split(',')
-        .filter_map(|s| s.parse::<u64>().ok())
-        .collect())
-}
+mod store;
+use store::{Config, Status};
+mod util;
 
-/// Return the value of the 'CONTAINMENT_ROLE' environment variables as a `u64`.
-fn get_containment_role() -> Result<u64> {
-    Ok(env::var("CONTAINMENT_ROLE")?.parse()?)
-}
-
-/// Returns a vector of `Member`s that match the user ids from the environment variable.
-async fn get_members_for_containment(context: &Context, guild_id: &GuildId) -> Result<Vec<Member>> {
-    debug!("Getting member references for containment, matching env var");
-    let to_contain_ids = get_containment_user_ids()?;
-    let mut members = vec![];
-    let mut guild_members = guild_id.members_iter(&context).boxed();
-    while let Some(member) = guild_members.next().await {
-        let member = match member {
-            Ok(m) => m,
-            Err(e) => {
-                error!("Could not get member: {}", e);
-                continue;
-            }
-        };
-        let user_id = member.user.id;
-        if to_contain_ids.contains(user_id.as_u64()) {
-            debug!(
-                r#"User with member "{}" matches containment user ids list"#,
-                member.display_name()
-            );
-            members.push(member);
-        }
-    }
-    debug!(
-        "Returning members matching containment: {}",
-        members
-            .iter()
-            .map(|m| format!(r#""{}""#, m.display_name()))
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
-    Ok(members)
-}
-
-/// Turns a collection of `Member`s into a String.
-///
-/// The content of that String depends on how many structs are
-/// in the collection. The resulting String should be ready for
-/// reading as normal English.
-fn members_to_string(members: &[Member]) -> String {
-    match members.len() {
-        1 => format!(r#""{}""#, members[0].display_name()),
-        2 => format!(
-            r#""{}" and "{}""#,
-            members[0].display_name(),
-            members[1].display_name()
-        ),
-        _ => {
-            let comma_separated = members
-                .iter()
-                .map(|m| format!(r#""{}""#, m.display_name()))
-                .take(members.len() - 1)
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!(
-                "{}, and {}",
-                comma_separated,
-                members[members.len() - 1].display_name()
-            )
-        }
-    }
-}
+const CONFIG_FILE_NAME: &str = "scp_config.json";
+const STATUS_FILE_NAME: &str = "scp_status.json";
 
 #[command]
-#[checks(Admin)]
-async fn breach(context: &Context, message: &Message) -> CommandResult {
+#[checks(RoleMod)]
+async fn breach(context: &Context, message: &Message, mut args: Args) -> CommandResult {
     info!("Breach command used by {}", message.author.name);
-    message.reply(&context, "Aye, aye sir!").await?;
-    message
-        .channel_id
-        .send_message(&context, |m| {
-            m.content("Containment breach detected!");
-            m
-        })
-        .await?;
-    message
-        .channel_id
-        .send_message(&context, |m| {
-            m.content("Putting subjects into quarantine!");
-            m
-        })
-        .await?;
+    if args.len() != 1 {
+        message
+            .reply(&context, "Use as: `!breach <mention>`")
+            .await?;
+        return Ok(());
+    }
 
-    let guild = message
-        .guild_id
-        .ok_or_else(|| anyhow!("Could not get guild from message model"))?;
-    let containment_role = get_containment_role()?;
-    let members = get_members_for_containment(context, &guild).await?;
-    for mut member in members {
-        debug!("Adding contained role to {}", member.display_name());
-        if let Err(e) = member.add_role(&context, containment_role).await {
-            error!(
-                "Could not add containment role {} to {}: {}",
-                containment_role,
-                member.display_name(),
+    let mention_str: String = args.single().expect("Should not be reached");
+    let mention_id = match parse_mention(&mention_str) {
+        Some(m) => m,
+        None => {
+            message
+                .reply(&context, "Could not resolve that mention to anything")
+                .await?;
+            return Ok(());
+        }
+    };
+    let mentioned_member = match context
+        .http
+        .get_member(
+            *message
+                .guild_id
+                .ok_or_else(|| anyhow!("Could not get guild ID from message"))?
+                .as_u64(),
+            mention_id,
+        )
+        .await
+    {
+        Ok(m) => m,
+        Err(e) => {
+            warn!(
+                "Could not turn mentioned user id into member instance: {}",
                 e
             );
+            message
+                .reply(&context, "Could not resolve that mention to a user")
+                .await?;
+            return Ok(());
         }
-    }
+    };
+
+    // TODO here's where the processing can happen
+
+    // let client_data = context.data.read().await;
+    // let config = client_data
+    //     .get::<ConfigContainer>()
+    //     .ok_or_else(|| anyhow!("Could not get config from client data"))?;
+    // info!("Got config reference, bot token is {}", config.bot_token);
+
     Ok(())
 }
 
 #[command]
-#[checks(Admin)]
+#[checks(RoleMod)]
+async fn unbreach(context: &Context, message: &Message, args: Args) -> CommandResult {
+    info!("Unbreach command used by {}", message.author.name);
+    message.reply(&context, "Command not implemented").await?;
+    // TODO
+    Ok(())
+}
+
+#[command]
+#[checks(RoleMod)]
 async fn sitrep(context: &Context, message: &Message) -> CommandResult {
     info!("Sitrep command used by {}", message.author.name);
-    let mut is_contained = false;
-    let guild = message
-        .guild_id
-        .ok_or_else(|| anyhow!("Could not get guild from message model"))?;
-    let containment_role = get_containment_role()?;
-    let members = get_members_for_containment(context, &guild).await?;
-    for member in &members {
-        let mut role_names = vec![];
-        for role in &member.roles {
-            let s = format!(
-                "{} ({})",
-                role.to_role_cached(&context).await.unwrap().name,
-                role.as_u64()
-            );
-            role_names.push(s);
-        }
-        debug!(
-            "Roles for {}: {}",
-            member.display_name(),
-            role_names.join(", ")
-        );
-
-        if member
-            .roles
-            .iter()
-            .map(|r| r.as_u64())
-            .any(|r| r == &containment_role)
-        {
-            debug!(
-                "Setting 'is_contained' to true because of {}",
-                member.display_name()
-            );
-            is_contained = true;
-            break;
-        }
-    }
-
-    if is_contained {
-        message
-            .channel_id
-            .send_message(&context, |m| {
-                m.content(format!(
-                    "Subjects {} are contained, sir! o7",
-                    members_to_string(&members)
-                ));
-                m
-            })
-            .await?;
-    } else {
-        message
-            .channel_id
-            .send_message(&context, |m| {
-                m.content("Standing at the ready! o7");
-                m
-            })
-            .await?;
-    }
-    Ok(())
-}
-
-#[command]
-#[checks(Admin)]
-async fn unbreach(context: &Context, message: &Message) -> CommandResult {
-    info!("Unbreach command used by {}", message.author.name);
-    message.reply(&context, "Aye, aye sir!").await?;
-
-    let guild = message
-        .guild_id
-        .ok_or_else(|| anyhow!("Could not get guild from message model"))?;
-    let containment_role = get_containment_role()?;
-    let members = get_members_for_containment(context, &guild).await?;
-    for mut member in members {
-        if let Err(e) = member.remove_role(&context, containment_role).await {
-            error!(
-                "Error removing containment role from {}: {}",
-                member.display_name(),
-                e
-            );
-        }
-    }
+    message.reply(&context, "Command not implemented").await?;
+    // TODO
     Ok(())
 }
 
 #[check]
-#[name = "Admin"]
+#[name = "RoleMod"]
 #[check_in_help(true)]
 #[display_in_help(true)]
-async fn admin_check(
+async fn role_mod_check(
     context: &Context,
-    msg: &Message,
+    message: &Message,
     _: &mut Args,
     _: &CommandOptions,
 ) -> CheckResult {
-    if let Ok(member) = msg.member(&context).await {
+    debug!("Checking permission for command");
+    if let Ok(member) = message.member(&context).await {
         if let Ok(permissions) = member.permissions(&context).await {
-            return permissions.administrator().into();
+            return permissions.manage_roles().into();
         }
     }
+    debug!(
+        "User '{}' does not have the required permission",
+        message.author.name
+    );
     false.into()
 }
 
 #[group]
 #[commands(breach, unbreach, sitrep)]
 struct General;
+
+struct ConfigContainer;
+
+impl TypeMapKey for ConfigContainer {
+    type Value = Config;
+}
+
+struct StatusContainer;
+
+impl TypeMapKey for StatusContainer {
+    type Value = Status;
+}
 
 struct Handler;
 
@@ -246,34 +142,84 @@ impl EventHandler for Handler {
     }
 }
 
-#[tokio::main]
-async fn main() {
-    // environment setup
-    if Path::new(".env").exists() {
-        dotenv::dotenv().expect("Could not load from .env file");
-    }
-    pretty_env_logger::init();
-    let token = match env::var("DISCORD_TOKEN") {
-        Ok(t) => t,
-        Err(_) => {
-            error!("Environment variable 'DISCORD_TOKEN' is not set");
+fn load_flatfiles() -> (Config, Status) {
+    debug!("Loading config from {}", CONFIG_FILE_NAME);
+    let config: Config = match store::load(Path::new(CONFIG_FILE_NAME)) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("Could not load config: {}", e);
             process::exit(1);
         }
     };
-    debug!("Token loaded from environment variable");
+    debug!("loading status from {}", STATUS_FILE_NAME);
+    let status: Status = {
+        let path = Path::new(STATUS_FILE_NAME);
+        if path.exists() {
+            match store::load(path) {
+                Ok(s) => s,
+                Err(e) => {
+                    error!("Status file exists but could not be read: {}", e);
+                    warn!("Defaulting to empty status");
+                    Status::default()
+                }
+            }
+        } else {
+            warn!("Status file does not exist, defaulting to empty status");
+            Status::default()
+        }
+    };
+    (config, status)
+}
 
-    let mut client = Client::builder(&token)
+#[help]
+#[command_not_found_text = "Could not find: `{}`."]
+#[max_levenshtein_distance(3)]
+#[indention_prefix = "+"]
+#[lacking_permissions = "Hide"]
+#[lacking_role = "Nothing"]
+#[wrong_channel = "Strike"]
+async fn my_help(
+    context: &Context,
+    msg: &Message,
+    args: Args,
+    help_options: &'static HelpOptions,
+    groups: &[&'static CommandGroup],
+    owners: HashSet<UserId>,
+) -> CommandResult {
+    let _ = help_commands::with_embeds(context, msg, args, help_options, groups, owners).await;
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() {
+    if env::var("RUST_LOG").is_err() {
+        env::set_var("RUST_LOG", "scp_containment_unit")
+    }
+    pretty_env_logger::init();
+
+    let (config, status) = load_flatfiles();
+
+    let mut client = Client::builder(&config.bot_token)
         .event_handler(Handler)
         .framework(
             StandardFramework::new()
                 .configure(|c| c.prefix("!"))
+                .help(&MY_HELP)
                 .group(&GENERAL_GROUP),
         )
         .await
         .expect("Could not create client");
+    {
+        debug!("Moving config and status into client datastore");
+        let mut client_data = client.data.write().await;
+        client_data.insert::<ConfigContainer>(config);
+        client_data.insert::<StatusContainer>(status);
+    }
     debug!("Bot set up");
 
+    debug!("Bot starting");
     if let Err(e) = client.start().await {
         error!("Error starting client: {}", e);
+        process::exit(1);
     }
 }
