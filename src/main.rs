@@ -16,6 +16,7 @@ use std::{collections::HashSet, env, path::Path, process};
 mod store;
 use store::{Config, Status};
 mod util;
+use util::discord::extract_mentioned_user;
 
 const CONFIG_FILE_NAME: &str = "scp_config.json";
 const STATUS_FILE_NAME: &str = "scp_status.json";
@@ -30,48 +31,53 @@ async fn breach(context: &Context, message: &Message, mut args: Args) -> Command
             .await?;
         return Ok(());
     }
-
     let mention_str: String = args.single().expect("Should not be reached");
-    let mention_id = match parse_mention(&mention_str) {
-        Some(m) => m,
-        None => {
-            message
-                .reply(&context, "Could not resolve that mention to anything")
-                .await?;
-            return Ok(());
-        }
-    };
-    let mentioned_member = match context
-        .http
-        .get_member(
-            *message
-                .guild_id
-                .ok_or_else(|| anyhow!("Could not get guild ID from message"))?
-                .as_u64(),
-            mention_id,
-        )
-        .await
-    {
+    let mentioned = match extract_mentioned_user(context, message, &mention_str).await {
         Ok(m) => m,
         Err(e) => {
-            warn!(
-                "Could not turn mentioned user id into member instance: {}",
-                e
-            );
+            warn!("Could not find mentioned user in command: {}", e);
             message
-                .reply(&context, "Could not resolve that mention to a user")
+                .reply(
+                    context,
+                    format!(r#"Could not find mentioned user "{}""#, mention_str),
+                )
                 .await?;
             return Ok(());
         }
     };
 
-    // TODO here's where the processing can happen
+    let client_data = context.data.read().await;
+    let bot_config = client_data
+        .get::<ConfigContainer>()
+        .ok_or_else(|| anyhow!("Could not get config from client data"))?;
+    let mut bot_status = client_data
+        .get::<StatusContainer>()
+        .ok_or_else(|| anyhow!("Could not get status from client data"))?;
 
-    // let client_data = context.data.read().await;
+    if bot_status
+        .to_restore
+        .iter()
+        .find(|&cu| cu.user_id == *mentioned.user.id.as_u64())
+        .is_some()
+    {
+        message
+            .reply(
+                context,
+                "That user is already contained; use `!unbreach <mention>` to restore them",
+            )
+            .await?;
+        return Ok(());
+    };
+
+    // grab user id
+    // get list of groups matching prefix and remove them
+    // add the contained role
+    // add to bot_status
+    // reply to admin
+
     // let config = client_data
     //     .get::<ConfigContainer>()
     //     .ok_or_else(|| anyhow!("Could not get config from client data"))?;
-    // info!("Got config reference, bot token is {}", config.bot_token);
 
     Ok(())
 }
