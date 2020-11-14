@@ -1,22 +1,9 @@
-use anyhow::anyhow;
-use log::{debug, error, info, warn};
-use serenity::{
-    framework::standard::{
-        help_commands,
-        macros::{check, command, group, help},
-        Args, CheckResult, CommandGroup, CommandOptions, CommandResult, HelpOptions,
-        StandardFramework,
-    },
-    model::{channel::Message, gateway::Ready, id::UserId},
-    prelude::*,
-    utils::parse_mention,
-};
-use std::{collections::HashSet, env, path::Path, process};
+mod common;
+use common::*;
 
+mod commands;
 mod store;
-use store::{Config, Status};
 mod util;
-use util::discord::extract_mentioned_user;
 
 const CONFIG_FILE_NAME: &str = "scp_config.json";
 const STATUS_FILE_NAME: &str = "scp_status.json";
@@ -24,6 +11,7 @@ const STATUS_FILE_NAME: &str = "scp_status.json";
 #[command]
 #[checks(RoleMod)]
 async fn breach(context: &Context, message: &Message, mut args: Args) -> CommandResult {
+    // validate command
     info!("Breach command used by {}", message.author.name);
     if args.len() != 1 {
         message
@@ -31,8 +19,10 @@ async fn breach(context: &Context, message: &Message, mut args: Args) -> Command
             .await?;
         return Ok(());
     }
+
+    // get targeted member
     let mention_str: String = args.single().expect("Should not be reached");
-    let mentioned = match extract_mentioned_user(context, message, &mention_str).await {
+    let mut mentioned = match extract_mentioned_user(context, message, &mention_str).await {
         Ok(m) => m,
         Err(e) => {
             warn!("Could not find mentioned user in command: {}", e);
@@ -46,14 +36,23 @@ async fn breach(context: &Context, message: &Message, mut args: Args) -> Command
         }
     };
 
-    let client_data = context.data.read().await;
-    let bot_config = client_data
-        .get::<ConfigContainer>()
-        .ok_or_else(|| anyhow!("Could not get config from client data"))?;
-    let mut bot_status = client_data
-        .get::<StatusContainer>()
+    // prep the stores
+    let mut client_data = context.data.write().await;
+    let (contained_role_id, remove_role_prefix) = {
+        // this required syntax for navigating the locks is annoying, but what are ya gonna do
+        let bot_config = client_data
+            .get::<ConfigContainer>()
+            .ok_or_else(|| anyhow!("Could not get config from client data"))?;
+        (
+            bot_config.role_to_add,
+            bot_config.role_prefix_to_remove.clone(),
+        )
+    };
+    let bot_status = client_data
+        .get_mut::<StatusContainer>()
         .ok_or_else(|| anyhow!("Could not get status from client data"))?;
 
+    // check for already being contained
     if bot_status
         .to_restore
         .iter()
@@ -69,15 +68,39 @@ async fn breach(context: &Context, message: &Message, mut args: Args) -> Command
         return Ok(());
     };
 
-    // grab user id
-    // get list of groups matching prefix and remove them
-    // add the contained role
-    // add to bot_status
-    // reply to admin
+    // strip matching roles from member
+    let current_roles = mentioned.roles(context).await;
+    let roles_to_restore = match current_roles {
+        Some(current_roles) => {
+            let roles_to_remove: Vec<_> = current_roles
+                .iter()
+                .filter(|&role| role.name.starts_with(&remove_role_prefix))
+                .map(|role| role.id)
+                .collect();
+            mentioned.remove_roles(context, &roles_to_remove).await?;
+            roles_to_remove
+        }
+        None => {
+            debug!("{} does not have roles", mentioned.user.name);
+            Vec::new()
+        }
+    };
 
-    // let config = client_data
-    //     .get::<ConfigContainer>()
-    //     .ok_or_else(|| anyhow!("Could not get config from client data"))?;
+    // add the contained role
+    mentioned.add_role(context, contained_role_id).await?;
+
+    // add to bot_status
+    bot_status.to_restore.push(ContainedUser::new(
+        mentioned.user.id.as_u64(),
+        &mentioned.user.name,
+        &roles_to_restore
+            .iter()
+            .map(|&role_id| *role_id.as_u64())
+            .collect::<Vec<u64>>(),
+    ));
+
+    // reply
+    message.reply(context, "Aye aye, sir!").await?;
 
     Ok(())
 }
@@ -126,18 +149,6 @@ async fn role_mod_check(
 #[group]
 #[commands(breach, unbreach, sitrep)]
 struct General;
-
-struct ConfigContainer;
-
-impl TypeMapKey for ConfigContainer {
-    type Value = Config;
-}
-
-struct StatusContainer;
-
-impl TypeMapKey for StatusContainer {
-    type Value = Status;
-}
 
 struct Handler;
 

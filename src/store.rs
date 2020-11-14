@@ -1,6 +1,4 @@
-use anyhow::Result;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{default::Default, fs, path::Path};
+use crate::common::*;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Config {
@@ -13,7 +11,17 @@ pub struct Config {
 pub struct ContainedUser {
     pub user_id: u64,
     pub name: String,
-    pub role_ids: Vec<u64>,
+    pub role_ids_to_restore: Vec<u64>,
+}
+
+impl ContainedUser {
+    pub fn new<S: Into<String>>(user_id: &u64, name: S, role_ids_to_restore: &[u64]) -> Self {
+        Self {
+            user_id: *user_id,
+            name: name.into(),
+            role_ids_to_restore: role_ids_to_restore.to_owned(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Default)]
@@ -31,4 +39,18 @@ pub fn save<S: Serialize>(instance: S, path: &Path) -> Result<()> {
     let content = serde_json::to_string(&instance)?;
     fs::write(path, &content)?;
     Ok(())
+}
+
+// types for Serenity
+
+pub struct ConfigContainer;
+
+impl TypeMapKey for ConfigContainer {
+    type Value = Config;
+}
+
+pub struct StatusContainer;
+
+impl TypeMapKey for StatusContainer {
+    type Value = Status;
 }
