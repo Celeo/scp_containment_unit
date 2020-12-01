@@ -10,9 +10,7 @@ A Discord bot.
 
 ## Using
 
-1. Create an `.env` file next to the bot binary
-1. Populate with `DISCORD_TOKEN` (String), `CONTAINMENT_USER_IDS` (comma-separated number), and `CONTAINMENT_ROLE` (number) values
-1. Run the bot (does not take any arguments)
+TBD
 
 ## Developing
 
@@ -20,23 +18,19 @@ A Discord bot.
 
 ### Requirements
 
-* Git
-* A recent version of [Rust](https://www.rust-lang.org/tools/install)
+TBD
 
 ### Steps
 
 ```sh
 git clone https://github.com/Celeo/scp_containment_unit
 cd scp_containment_unit
-cargo build
+TBD
 ```
 
 ## License
 
-Licensed under either of
-
-* Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE))
-* MIT license ([LICENSE-MIT](LICENSE-MIT))
+TBD
 
 ## Contributing
 
