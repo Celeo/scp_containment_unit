@@ -1,0 +1,9 @@
+{
+  // You'll have to configure this yourself, of course.
+  "python.pythonPath": "/home/matt/.cache/pypoetry/virtualenvs/scp-containment-unit-tAJy2eF_-py3.8",
+  "[python]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "ms-python.python"
+  },
+  "python.formatting.provider": "black"
+}
